@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 SCT-013-000 訊號監控面板</title>
+    <!-- Google Fonts: Outfit & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(22, 28, 45, 0.45);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-cyan: #06b6d4;
+            --accent-blue: #3b82f6;
+            --accent-purple: #a855f7;
+            --accent-green: #10b981;
+            --accent-glow: rgba(6, 182, 212, 0.15);
+            --font-family-title: 'Outfit', sans-serif;
+            --font-family-body: 'Inter', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: var(--font-family-body);
+            min-height: 100vh;
+            padding: 2rem 1.5rem;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(59, 130, 246, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(168, 85, 247, 0.08) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2.5rem;
+            border-bottom: 1px solid var(--card-border);
+            padding-bottom: 1.5rem;
+        }
+
+        .logo-section h1 {
+            font-family: var(--font-family-title);
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff 0%, var(--accent-cyan) 50%, var(--accent-blue) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-section p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-top: 0.25rem;
+        }
+
+        .controls-section {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .badge-live {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--accent-green);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            padding: 0.4rem 0.8rem;
+            border-radius: 50px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .badge-live .dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent-green);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 8px var(--accent-green); }
+            100% { transform: scale(0.9); opacity: 0.6; }
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: var(--font-family-body);
+            font-weight: 500;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--text-secondary);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-cyan) 100%);
+            border: none;
+            box-shadow: 0 4px 12px rgba(6, 182, 212, 0.2);
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 6px 16px rgba(6, 182, 212, 0.35);
+            transform: translateY(-1px);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(6, 182, 212, 0.3);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2), 0 0 15px var(--accent-glow);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--accent-blue);
+        }
+
+        .stat-card.cyan::before { background: var(--accent-cyan); }
+        .stat-card.purple::before { background: var(--accent-purple); }
+        .stat-card.green::before { background: var(--accent-green); }
+
+        .stat-label {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-family: var(--font-family-title);
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stat-unit {
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-left: 0.2rem;
+        }
+
+        .stat-footer {
+            margin-top: 0.75rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        /* Charts Grid */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        @media (max-width: 1024px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .chart-container {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            min-height: 400px;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .chart-title {
+            font-family: var(--font-family-title);
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* Table Card */
+        .table-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            overflow: hidden;
+        }
+
+        .table-header {
+            margin-bottom: 1.25rem;
+        }
+
+        .table-title {
+            font-family: var(--font-family-title);
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .table-wrapper {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            padding: 1rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--card-border);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 1rem;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .timestamp-cell {
+            font-family: monospace;
+            color: var(--accent-cyan);
+        }
+
+        .value-cell-primary {
+            font-weight: 600;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 640px) {
+            body {
+                padding: 1rem 1rem;
+            }
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+            .controls-section {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="logo-section">
+                <h1>ESP32 功率監控面板</h1>
+                <p>經由 SCT-013-000 比流器傳輸資料，即時寫入 SQLite 資料庫</p>
+            </div>
+            <div class="controls-section">
+                <div class="badge-live" id="live-indicator">
+                    <div class="dot" id="live-dot"></div>
+                    <span id="live-text">即時連線中</span>
+                </div>
+                <button class="btn" id="pause-btn" style="border-color: rgba(245, 158, 11, 0.3);">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="pause-icon"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                    <span id="pause-text">暫停更新</span>
+                </button>
+                <button class="btn" id="refresh-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                    手動重新整理
+                </button>
+            </div>
+        </header>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <!-- Total Count -->
+            <div class="stat-card">
+                <div class="stat-label">總採樣筆數</div>
+                <div class="stat-value" id="stat-count">0</div>
+                <div class="stat-footer">資料庫累計記錄</div>
+            </div>
+            <!-- Current RMS -->
+            <div class="stat-card cyan">
+                <div class="stat-label">最新電流</div>
+                <div class="stat-value" id="stat-current">0.000<span class="stat-unit">A</span></div>
+                <div class="stat-footer" id="stat-current-time">--:--:--</div>
+            </div>
+            <!-- Max Current -->
+            <div class="stat-card purple">
+                <div class="stat-label">最大電流</div>
+                <div class="stat-value" id="stat-max-current">0.000<span class="stat-unit">A</span></div>
+                <div class="stat-footer">偵測之峰值電流</div>
+            </div>
+            <!-- Apparent Power -->
+            <div class="stat-card green">
+                <div class="stat-label">最新現在功率</div>
+                <div class="stat-value" id="stat-power">0.0<span class="stat-unit">W</span></div>
+                <div class="stat-footer" id="stat-power-time">--:--:--</div>
+            </div>
+            <!-- Total Energy -->
+            <div class="stat-card">
+                <div class="stat-label">估算總消耗電能</div>
+                <div class="stat-value" id="stat-energy">0.0000<span class="stat-unit">kWh</span></div>
+                <div class="stat-footer">依平均功率與歷時估算</div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="charts-grid">
+            <!-- Current Chart -->
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h2 class="chart-title">電流趨勢 (Current RMS)</h2>
+                </div>
+                <div style="position: relative; height: 320px; width: 100%;">
+                    <canvas id="currentChart"></canvas>
+                </div>
+            </div>
+            <!-- Power Chart -->
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h2 class="chart-title">現在功率趨勢 (Apparent Power)</h2>
+                </div>
+                <div style="position: relative; height: 320px; width: 100%;">
+                    <canvas id="powerChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Readings Table -->
+        <div class="table-card">
+            <div class="table-header">
+                <h2 class="table-title">最新歷史數據 (最近 20 筆)</h2>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>時間戳記 (Timestamp)</th>
+                            <th>電流有效值 Current RMS (A)</th>
+                            <th>現在功率 Apparent Power (W)</th>
+                            <th>寫入系統時間</th>
+                        </tr>
+                    </thead>
+                    <tbody id="readings-table-body">
+                        <tr>
+                            <td colspan="4" style="text-align: center; color: var(--text-secondary);">載入中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Set chart default styling
+        Chart.defaults.color = '#9ca3af';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+
+        let currentChartObj = null;
+        let powerChartObj = null;
+        let isPaused = false;
+
+        // Initialize empty charts
+        function initCharts() {
+            const ctxCurrent = document.getElementById('currentChart').getContext('2d');
+            const gradientCurrent = ctxCurrent.createLinearGradient(0, 0, 0, 300);
+            gradientCurrent.addColorStop(0, 'rgba(6, 182, 212, 0.4)');
+            gradientCurrent.addColorStop(1, 'rgba(6, 182, 212, 0.0)');
+
+            currentChartObj = new Chart(ctxCurrent, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: '電流 (A)',
+                        data: [],
+                        borderColor: '#06b6d4',
+                        borderWidth: 2,
+                        backgroundColor: gradientCurrent,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#06b6d4'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { maxTicksLimit: 10 }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            title: { display: true, text: '安培 (A)' },
+                            suggestedMin: 0,
+                            grace: '15%'
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+
+            const ctxPower = document.getElementById('powerChart').getContext('2d');
+            const gradientPower = ctxPower.createLinearGradient(0, 0, 0, 300);
+            gradientPower.addColorStop(0, 'rgba(16, 185, 129, 0.4)');
+            gradientPower.addColorStop(1, 'rgba(16, 185, 129, 0.0)');
+
+            powerChartObj = new Chart(ctxPower, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: '功率 (W)',
+                        data: [],
+                        borderColor: '#10b981',
+                        borderWidth: 2,
+                        backgroundColor: gradientPower,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#10b981'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { maxTicksLimit: 10 }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            title: { display: true, text: '瓦特 (W)' },
+                            suggestedMin: 0,
+                            grace: '15%'
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        // Fetch updates from APIs
+        async function updateDashboard() {
+            try {
+                // 1. Fetch Stats
+                const statsRes = await fetch('/api/stats');
+                const statsData = await statsRes.json();
+                if (statsData.status === 'success') {
+                    const stats = statsData.data;
+                    document.getElementById('stat-count').innerText = stats.count.toLocaleString();
+                    document.getElementById('stat-max-current').innerHTML = `${stats.max_current.toFixed(3)}<span class="stat-unit">A</span>`;
+                    document.getElementById('stat-energy').innerHTML = `${stats.total_energy_kwh.toFixed(4)}<span class="stat-unit">kWh</span>`;
+                    
+                    if (stats.latest_reading) {
+                        document.getElementById('stat-current').innerHTML = `${stats.latest_reading.current_rms.toFixed(3)}<span class="stat-unit">A</span>`;
+                        document.getElementById('stat-power').innerHTML = `${stats.latest_reading.apparent_power.toFixed(1)}<span class="stat-unit">W</span>`;
+                        
+                        const timePart = stats.latest_reading.timestamp.split(' ')[1] || '';
+                        document.getElementById('stat-current-time').innerText = `時間: ${timePart}`;
+                        document.getElementById('stat-power-time').innerText = `時間: ${timePart}`;
+                    }
+                }
+
+                // 2. Fetch Readings (last 50 for charts, table shows last 20)
+                const readingsRes = await fetch('/api/readings?limit=50');
+                const readingsData = await readingsRes.json();
+                if (readingsData.status === 'success') {
+                    const readings = readingsData.data;
+
+                    if (readings.length === 0) {
+                        document.getElementById('readings-table-body').innerHTML = `
+                            <tr>
+                                <td colspan="4" style="text-align: center; color: var(--text-secondary);">尚未有任何數據寫入</td>
+                            </tr>
+                        `;
+                        return;
+                    }
+
+                    // Render table (up to 20 items)
+                    const tableHtml = readings.slice(0, 20).map(r => `
+                        <tr>
+                            <td class="timestamp-cell">${r.timestamp}</td>
+                            <td class="value-cell-primary" style="color: var(--accent-cyan);">${r.current_rms.toFixed(3)} A</td>
+                            <td class="value-cell-primary" style="color: var(--accent-green);">${r.apparent_power.toFixed(1)} W</td>
+                            <td style="color: var(--text-secondary); font-size: 0.8rem;">${r.created_at}</td>
+                        </tr>
+                    `).join('');
+                    document.getElementById('readings-table-body').innerHTML = tableHtml;
+
+                    // Update charts (chronological order)
+                    const chronReadings = [...readings].reverse();
+                    const labels = chronReadings.map(r => r.timestamp.split(' ')[1] || r.timestamp);
+                    const currents = chronReadings.map(r => r.current_rms);
+                    const powers = chronReadings.map(r => r.apparent_power);
+
+                    currentChartObj.data.labels = labels;
+                    currentChartObj.data.datasets[0].data = currents;
+                    currentChartObj.update();
+
+                    powerChartObj.data.labels = labels;
+                    powerChartObj.data.datasets[0].data = powers;
+                    powerChartObj.update();
+                }
+            } catch (err) {
+                console.error("Error updating dashboard:", err);
+            }
+        }
+
+        // Setup refresh events
+        document.getElementById('refresh-btn').addEventListener('click', () => {
+            const btn = document.getElementById('refresh-btn');
+            btn.style.transform = 'scale(0.95)';
+            setTimeout(() => btn.style.transform = 'none', 100);
+            updateDashboard();
+        });
+
+        // Setup pause/resume event
+        document.getElementById('pause-btn').addEventListener('click', () => {
+            isPaused = !isPaused;
+            const pauseBtn = document.getElementById('pause-btn');
+            const pauseText = document.getElementById('pause-text');
+            const pauseIcon = document.getElementById('pause-icon');
+            const liveIndicator = document.getElementById('live-indicator');
+            const liveDot = document.getElementById('live-dot');
+            const liveText = document.getElementById('live-text');
+
+            if (isPaused) {
+                // UI state for Paused
+                pauseBtn.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                pauseBtn.style.color = 'var(--accent-green)';
+                pauseText.innerText = '恢復更新';
+                // Change icon to play (triangle)
+                pauseIcon.innerHTML = '<path d="M8 5v14l11-7z"></path>';
+                
+                // Live indicator state
+                liveIndicator.style.borderColor = 'rgba(239, 68, 68, 0.25)';
+                liveIndicator.style.background = 'rgba(239, 68, 68, 0.1)';
+                liveIndicator.style.color = '#ef4444';
+                liveDot.style.backgroundColor = '#ef4444';
+                liveText.innerText = '更新已暫停';
+            } else {
+                // UI state for Live
+                pauseBtn.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+                pauseBtn.style.color = 'var(--text-primary)';
+                pauseText.innerText = '暫停更新';
+                // Change icon to pause (two vertical bars)
+                pauseIcon.innerHTML = '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>';
+                
+                // Live indicator state
+                liveIndicator.style.borderColor = 'rgba(16, 185, 129, 0.25)';
+                liveIndicator.style.background = 'rgba(16, 185, 129, 0.1)';
+                liveIndicator.style.color = 'var(--accent-green)';
+                liveDot.style.backgroundColor = 'var(--accent-green)';
+                liveText.innerText = '即時連線中';
+                
+                // Refresh immediately when resuming
+                updateDashboard();
+            }
+        });
+
+        // Initialize and poll
+        window.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            updateDashboard();
+            // Poll every 3 seconds for live dashboard updates
+            setInterval(() => {
+                if (!isPaused) {
+                    updateDashboard();
+                }
+            }, 3000);
+        });
+    </script>
+</body>
+</html>

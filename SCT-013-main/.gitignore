@@ -1,0 +1,17 @@
+# Database
+*.db
+sensor_data.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+ENV/
+
+# Local logs / test data
+mock_logs.txt
+logs.txt
+*.log
